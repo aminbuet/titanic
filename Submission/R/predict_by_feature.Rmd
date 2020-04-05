@@ -1,0 +1,212 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+setwd("C:/Users/aminb/OneDrive/Documents/Data Science/Kaggle/Titanic/Submission")
+
+train <- read.csv("C:/Users/aminb/OneDrive/Documents/Data Science/Kaggle/Titanic/data/train.csv")
+
+test <- read.csv("C:/Users/aminb/OneDrive/Documents/Data Science/Kaggle/Titanic/data/test.csv")
+
+```
+
+```{r}
+# See a name
+train$Name[1]
+
+```
+```{r}
+# add train & test
+test$Survived <- NA
+combined_set <- rbind(train, test)
+```
+
+```{r}
+# Creating variable Child and adult
+combined_set$child[combined_set$Age < 14] <- "Child"
+combined_set$adult[combined_set$Age >= 14] <- "Adult"
+```
+
+```{r}
+# Show counts
+table(combined_set$child, combined_set$Survived)
+```
+
+```{r}
+typeof(combined_set$child)
+```
+
+```{r}
+# to factor
+combined_set$child <- factor(combined_set$child)
+```
+
+```{r}
+#Cabin
+
+combined_set$Cabin[1]
+```
+
+```{r}
+typeof(combined_set$Cabin)
+```
+
+```{r}
+combined_set$Cabin <- as.character(combined_set$Cabin)
+typeof(combined_set$Cabin)
+```
+
+```{r}
+strsplit(combined_set$Cabin[2], NULL)[[1]]
+combined_set$Deck <- factor(sapply(combined_set$Cabin,
+                        function(x) strsplit(x, NULL)[[1]][1]))
+
+```
+
+```{r}
+combined_set$Cabin <- factor(combined_set$Cabin)
+
+```
+
+```{r}
+# fare_type
+                                 
+combined_set$Fare_type[combined_set$Fare<50]<-"low"
+combined_set$Fare_type[combined_set$Fare>50 & combined_set$Fare<=100]<-"med1"
+combined_set$Fare_type[combined_set$Fare>100 & combined_set$Fare<=150]<-"med2"
+combined_set$Fare_type[combined_set$Fare>150 & combined_set$Fare<=500]<-"high"
+combined_set$Fare_type[combined_set$Fare>500]<-"vhigh"
+
+aggregate(Survived~Fare_type, data=combined_set,mean) 
+
+```
+
+```{r}
+# Convert to a string
+combined_set$Name <- as.character(combined_set$Name)
+
+# What's in a name, again?
+combined_set$Name[1]
+
+```
+
+```{r}
+# Find the indexes for the tile piece of the name
+strsplit(combined_set$Name[1], split='[,.]')
+strsplit(combined_set$Name[1], split='[,.]')[[1]]
+strsplit(combined_set$Name[1], split='[,.]')[[1]][2]
+```
+
+```{r}
+# Engineered variable: Title
+combined_set$Title <- strsplit(combined_set$Name, split='[,.]')[[1]][2]  # Won't work!
+combined_set$Title <- sapply(combined_set$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]][2]})
+combined_set$Title <- sub(' ', '', combined_set$Title)
+```
+
+```{r}
+# Inspect new feature
+table(combined_set$Title)
+```
+
+```{r}
+# Combined_setne small title groups
+combined_set$Title[combined_set$Title %in% c('Mme', 'Mlle')] <- 'Mlle'
+combined_set$Title[combined_set$Title %in% c('Capt', 'Don', 'Major', 'Sir')] <- 'Sir'
+combined_set$Title[combined_set$Title %in% c('Dona', 'Lady', 'the Countess', 'Jonkheer')] <- 'Lady'
+
+```
+
+```{r}
+# Convert to a factor
+combined_set$Title <- factor(combined_set$Title)
+```
+
+```{r}
+# Adding Mother variable
+
+combined_set$Mother <- 'Not Mother'
+combined_set$Mother[combined_set$Sex == 'female' & combined_set$Parch > 0 & combined_set$Age > 18 & combined_set$Title != 'Miss'] <- 'Mother'
+
+```
+
+```{r}
+# Show counts
+table(combined_set$Mother, combined_set$Survived)
+```
+
+```{r}
+# Convert to a factor
+combined_set$Mother <- factor(combined_set$Mother)
+```
+
+```{r}
+# Engineered variable: Family size
+combined_set$FamilySize <- combined_set$SibSp + combined_set$Parch + 1
+
+```
+
+```{r}
+# Engineered variable: Family
+combined_set$Surname <- sapply(combined_set$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]][1]})
+combined_set$FamilyID <- paste(as.character(combined_set$FamilySize), combined_set$Surname, sep="")
+
+combined_set$FamilyID[combined_set$FamilySize == 1] <- 'single'
+combined_set$FamilyID[combined_set$FamilySize < 5 & combined_set$FamilySize > 1] <- 'Small'
+combined_set$FamilyID[combined_set$FamilySize > 4] <- 'large'
+```
+
+```{r}
+table(combined_set$FamilyID, combined_set$Survived)
+```
+
+
+```{r}
+# a new plot
+mosaicplot(table(combined_set$FamilyID, combined_set$Survived), main='Survival affected by Family Size ', shade=TRUE)
+                                 
+```
+
+```{r}
+# Convert to a factor
+combined_set$FamilyID <- factor(combined_set$FamilyID)
+```
+
+```{r}
+# Split back into test and train sets
+train <- combined_set[1:891,]
+test <- combined_set[892:1309,]
+```
+
+
+```{r}
+library(rpart.plot)
+library(rpart)
+library(RColorBrewer)
+library(rattle)
+# Build a new tree with our new features
+fit <- rpart(Survived ~ Pclass + Sex + Age + Mother + SibSp + Parch + Deck + Fare + Embarked + Title + FamilySize + FamilyID,
+             data=train, method="class")
+
+fancyRpartPlot(fit)
+```
+
+```{r}
+# Now let's make a prediction and write a submission file
+prediction_feature <- predict(fit, test, type = "class")
+submit <- data.frame(PassengerId = test$PassengerId, Survived = prediction_feature)
+write.csv(submit, file = "predictionFeature.csv", row.names = FALSE)
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
